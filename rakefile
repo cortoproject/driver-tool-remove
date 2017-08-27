@@ -1,0 +1,4 @@
+PACKAGE = 'driver/tool/remove'
+NOCORTO = true
+LANGUAGE = 'c'
+require "#{ENV['CORTO_BUILD']}/package"
