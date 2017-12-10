@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2017 the corto developers
+/* Copyright (c) 2010-2018 the corto developers
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,97 +19,113 @@
  * THE SOFTWARE.
  */
 
-#include <corto/argparse/argparse.h>
 #include <driver/tool/add/add.h>
-#include <driver/tool/remove/remove.h>
 
-static corto_bool cortotool_removeEntry(corto_file file, corto_ll list, corto_string entry) {
-    corto_bool found = FALSE;
-    corto_iter iter = corto_ll_iter(list);
-
-    while (corto_iter_hasNext(&iter)) {
-        corto_string str = corto_iter_next(&iter);
-        if (strcmp(str, entry)) {
-            fprintf(corto_fileGet(file), "%s\n", str);
-        } else {
-            found = TRUE;
-        }
-    }
-
-    return found;
-}
+/* This command uses parson instead of corto serialization/deserialization to
+ * ensure that any members not part of the corto package type are preserved. */
 
 int cortomain(int argc, char *argv[]) {
-    corto_ll silent, mute, nobuild, project, packages;
-    corto_bool build = FALSE;
+    char *pkg = NULL;
+    JSON_Value *json = NULL;
 
-    CORTO_UNUSED(argc);
-
-    corto_argdata *data = corto_argparse(
-      argv,
-      (corto_argdata[]){
-        /* Ignore first argument */
-        {"$0", NULL, NULL},
-        {"--silent", &silent, NULL},
-        {"--mute", &mute, NULL},
-        {"--nobuild", &nobuild, NULL},
-
-        /* Match at most one project directory */
-        {"$?*", &project, NULL},
-
-        /* At least one package must be specified */
-        {"$+*", &packages, NULL},
-        {NULL}
-      }
-    );
-
-    /* Move to project directory */
-    if (project) {
-        if (corto_chdir(corto_ll_get(project, 0))) {
+    if (argc == 2) {
+        pkg = argv[1];
+    } else if (argc == 3) {
+        if (corto_chdir(argv[1])) {
+            corto_throw(NULL);
             goto error;
         }
+        pkg = argv[2];
+    } else {
+        corto_throw("invalid number of arguments");
+        goto error;
     }
 
-    if (packages) {
-        corto_iter iter = corto_ll_iter(packages);
-        while (corto_iter_hasNext(&iter)) {
-            corto_string arg = corto_iter_next(&iter);
-            corto_string package = corto_tool_lookupPackage(arg);
-            if (!package) {
-                package = arg; /* Try to remove by matching string */
-            }
+    if (pkg[0] == '/') {
+        pkg ++;
+    }
 
-            corto_ll packages = corto_loadGetPackages();
-            corto_file file = corto_fileOpen(".corto/packages.txt");
-            corto_bool found = cortotool_removeEntry(file, packages, package);
-            corto_fileClose(file);
-            corto_loadFreePackages(packages);
+    if (!strlen(pkg)) {
+        corto_throw("invalid package identifier");
+        goto error;
+    }
 
-            if (!found) {
-                corto_error("'%s' ('%s') not found in package file", arg, package);
-                goto error;
-            } else {
-                build = TRUE;
-                printf("package '%s' removed from project\n", package);
-            }
+    if (!corto_file_test("project.json")) {
+        corto_throw("directory '%s' does not contain a corto project",
+            corto_cwd());
+        goto error;
+    }
+
+    json = json_parse_file("project.json");
+    if (!json) {
+        corto_throw("failed to parse 'project.json'");
+        goto error;
+    }
+
+    JSON_Object *jsonObject = json_value_get_object(json);
+    if (!jsonObject) {
+        corto_throw("invalid JSON in 'project.json': expected object");
+        goto error;
+    }
+
+    JSON_Object *json_m_value = NULL;
+    if (json_object_has_value(jsonObject, "value")) {
+        json_m_value = json_object_get_object(jsonObject, "value");
+        if (!json_m_value) {
+            /* If JSON has a value member, but wasn't resolved by the previous
+             * call, it is not of an object type */
+            corto_throw("invalid JSON: expected 'value' to be a JSON object");
+            goto error;
+        }
+    } else {
+        return 0;
+    }
+
+    JSON_Array *json_m_use = NULL;
+    if (json_object_has_value(json_m_value, "use")) {
+        json_m_use = json_object_get_array(json_m_value, "use");
+        if (!json_m_use) {
+            /* If JSON has a use member, but wasn't resolved by the previous
+             * call, it is not of an array type */
+            corto_throw("invalid JSON: expected 'value.use' to be a JSON array");
+            goto error;
+        }
+    }  else {
+        return 0;
+    }
+
+    /* Add package if it wasn't already added */
+    int i;
+    for (i = 0; i < json_array_get_count(json_m_use); i ++) {
+        const char *use = json_array_get_string(json_m_use, i);
+        if (use[0] == '/') {
+            use ++;
+        }
+
+        if (!strcmp(use, pkg)) {
+            json_array_remove(json_m_use, i);
+            break;
         }
     }
 
-    if (build && !nobuild) {
-        corto_load("driver/tool/build", 3, (char*[]){
-          "build",
-          silent ? "--silent" : "",
-          mute ? "--mute" : "",
-          NULL
-        });
-    }
+    char *escapedStr = json_serialize_to_string_pretty(json);
 
-    corto_argclean(data);
+    /* Parson escapes '/' which doesn't look nice in the project.json file.
+     * Until this becomes an optional feature in parson, replace \/ with / */
+    char *str = strreplace(escapedStr, "\\/", "/");
+    json_value_free(json);
+    free(escapedStr);
+
+    /* Write to file */
+    FILE *f = fopen("project.json", "w");
+    fprintf(f, "%s\n", str);
+    fclose(f);
+    free(str);
 
     return 0;
 error:
+    if (json) {
+        json_value_free(json);
+    }
     return -1;
-
-    return 0;
 }
-

@@ -1,0 +1,16 @@
+{
+    "id": "driver/tool/remove",
+    "type": "package",
+    "value": {
+        "description": "Tool to remove a package from project.json",
+        "author": "Sander Mertens",
+        "version": "1.0.0",
+        "language": "c",
+        "use": [
+            "parson",
+            "corto"
+        ],
+        "use_generated_api": false,
+        "managed": false
+    }
+}

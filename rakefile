@@ -1,5 +1,0 @@
-PACKAGE = 'driver/tool/remove'
-NOCORTO = true
-LANGUAGE = 'c'
-USE_PACKAGE = ['corto/argparse']
-require "#{ENV['CORTO_BUILD']}/package"
