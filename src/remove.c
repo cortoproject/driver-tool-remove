@@ -19,7 +19,7 @@
  * THE SOFTWARE.
  */
 
-#include <driver/tool/add/add.h>
+#include <driver/tool/remove/remove.h>
 
 /* This command uses parson instead of corto serialization/deserialization to
  * ensure that any members not part of the corto package type are preserved. */

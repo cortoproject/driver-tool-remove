@@ -2,17 +2,7 @@
 #ifndef DRIVER_TOOL_REMOVE_H
 #define DRIVER_TOOL_REMOVE_H
 
-/* Add include files here */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Insert definitions here */
-
-#ifdef __cplusplus
-}
-#endif
+#include <corto/corto.h>
+#include <parson/parson.h>
 
 #endif /* DRIVER_TOOL_REMOVE_H */
-
