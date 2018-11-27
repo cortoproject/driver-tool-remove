@@ -1,5 +1,5 @@
 {
-    "id": "driver/tool/remove",
+    "id": "driver.tool.remove",
     "type": "package",
     "value": {
         "description": "Tool to remove a package from project.json",
